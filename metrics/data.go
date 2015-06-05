@@ -166,7 +166,7 @@ func (self *MetricData) Report() {
 	for {
 		select {
 		case now := <-time.After(self.step):
-			if !self.updateStats() || !self.record.Vaild(self.container.ID) {
+			if !self.updateStats() || !self.record.Vaild(self.container.ID()) {
 				// get stats failed will close report
 				return
 			}
