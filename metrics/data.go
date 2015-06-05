@@ -27,9 +27,11 @@ type MetricData struct {
 	info map[string]uint64
 	save map[string]uint64
 	rate map[string]float64
+
+	record *MetricsRecorder
 }
 
-func NewMetricData(ID string, app *defines.App, container libcontainer.Container, client SingleConnRpcClient, step time.Duration, hostname string) *MetricData {
+func NewMetricData(record *MetricsRecorder, app *defines.App, container libcontainer.Container, client SingleConnRpcClient, step time.Duration, hostname string) *MetricData {
 	m := &MetricData{}
 	m.app = app
 	m.container = container
@@ -38,9 +40,10 @@ func NewMetricData(ID string, app *defines.App, container libcontainer.Container
 	m.info = map[string]uint64{}
 	m.save = map[string]uint64{}
 	m.rate = map[string]float64{}
+	m.record = record
 	m.tag = fmt.Sprintf(
 		"hostname=%s,cid=%s,ident=%s",
-		hostname, ID[:12], app.Ident,
+		hostname, container.ID()[:12], app.Ident,
 	)
 	m.endpoint = fmt.Sprintf("%s-%s", app.Name, app.EntryPoint)
 	return m
@@ -66,18 +69,16 @@ func (self *MetricData) setExec() (err error) {
 
 func (self *MetricData) updateStats() bool {
 	var stats *cgroups.Stats
-	if s, err := self.container.Stats(); err != nil {
-		logs.Info("Get Stats Failed", err)
-		return false
-	} else {
-		stats = s.CgroupStats
-	}
+	// TODO ignore NIC missing error
+	s, _ := self.container.Stats()
+	stats = s.CgroupStats
 
 	self.info["cpu_user"] = stats.CpuStats.CpuUsage.UsageInUsermode
 	self.info["cpu_system"] = stats.CpuStats.CpuUsage.UsageInKernelmode
 	self.info["cpu_usage"] = stats.CpuStats.CpuUsage.TotalUsage
 	self.info["mem_usage"] = stats.MemoryStats.Usage.Usage
 	self.info["mem_max_usage"] = stats.MemoryStats.Usage.MaxUsage
+	// FIXME null point
 	self.info["mem_rss"] = stats.MemoryStats.Stats["rss"]
 
 	if network, err := GetNetStats(self.exec); err != nil {
@@ -165,7 +166,7 @@ func (self *MetricData) Report() {
 	for {
 		select {
 		case now := <-time.After(self.step):
-			if !self.updateStats() {
+			if !self.updateStats() || !self.record.Vaild(self.container.ID) {
 				// get stats failed will close report
 				return
 			}

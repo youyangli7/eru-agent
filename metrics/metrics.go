@@ -57,8 +57,8 @@ func (self *MetricsRecorder) Add(ID string, app *defines.App) {
 		Timeout:   self.rpcTimeout,
 	}
 
-	metric := NewMetricData(ID, app, container, client, self.step, self.hostname)
-	self.apps[ID] = metric
+	metric := NewMetricData(self, app, container, client, self.step, self.hostname)
+	self.apps[container.ID()] = metric
 	go metric.Report()
 }
 
@@ -69,4 +69,11 @@ func (self *MetricsRecorder) Remove(ID string) {
 	if _, ok := self.apps[ID]; !ok {
 		return
 	}
+}
+
+func (self *MetricsRecorder) Vaild(ID string) bool {
+	self.RLock()
+	defer self.RUnlock()
+	_, ok := self.apps[ID]
+	return ok
 }
